@@ -44,7 +44,7 @@ ${message || ""}
 [답변 규칙]
 - 한국어로 답변하세요.
 - 중학교 2학년 수준으로 설명하세요.
-- 친절하지만 너무 길게 쓰지 말고 3~6문장 정도로 답하세요.
+- 질문이 단순하면 짧게 답하고, 설명이 필요한 질문이면 8~12문장까지 충분히 자세히 답하세요. 글자 수를 지나치게 짧게 제한하지 마세요.
 - 필요한 경우 돋보기, 조흔판, 쇠못, 묽은 염산, 자석 도구 사용법을 안내하세요.
 - 실험으로 확인해야 하는 내용은 단정하기보다 "실험으로 확인해 보자"처럼 말하세요.
 `.trim();
@@ -56,7 +56,7 @@ async function generateWithModel(ai, model, prompt) {
     contents: prompt,
     config: {
       temperature: 0.45,
-      maxOutputTokens: 512
+      maxOutputTokens: Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || 1600)
     }
   });
   return extractGeminiText(response);
