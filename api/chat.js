@@ -1,16 +1,88 @@
+import { GoogleGenAI } from "@google/genai";
+
+function fallbackReply(message, mineral, context, records) {
+  const name = mineral || "선택한 광물";
+  const data = context || {};
+  const q = String(message || "");
+
+  if (q.includes("조흔")) {
+    return `${name}의 조흔색은 ${data.streak || "실험으로 확인해 보세요"}입니다. 조흔판 도구를 선택한 뒤 광물을 조흔판 위에서 문지르면 확인할 수 있어요.`;
+  }
+  if (q.includes("염산") || q.includes("기포") || q.includes("거품")) {
+    return `${name}의 묽은 염산 반응은 ${data.acid || "실험으로 확인해 보세요"}입니다. 방해석처럼 탄산염 성분이 있는 광물은 묽은 염산에 기포가 생길 수 있어요.`;
+  }
+  if (q.includes("굳기") || q.includes("쇠못") || q.includes("긁")) {
+    return `${name}의 굳기 반응은 ${data.hardness || "실험으로 확인해 보세요"}입니다. 쇠못 도구를 선택한 뒤 실제 광물 부분을 누른 채 드래그해 보세요.`;
+  }
+  if (q.includes("자석") || q.includes("자성")) {
+    return `${name}의 자석 반응은 ${data.magnet || "실험으로 확인해 보세요"}입니다. 자철석은 자석에 끌려오는 대표적인 광물입니다.`;
+  }
+
+  return `${name}의 현재 정보입니다.\n겉보기색: ${data.color || "-"}\n조흔색: ${data.streak || "-"}\n굳기: ${data.hardness || "-"}\n염산 반응: ${data.acid || "-"}\n자석 반응: ${data.magnet || "-"}`;
+}
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const key = process.env.GEMINI_API_KEY;
+  if (req.method === "OPTIONS") {
+    res.setHeader("Allow", "POST, OPTIONS");
+    return res.status(204).end();
+  }
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   const { message, mineral, context, records } = req.body || {};
-  if (!key) return res.status(200).json({ reply: 'GEMINI_API_KEY가 설정되지 않아 기본 실험 도우미로 답변합니다. Vercel 환경변수에 API 키를 넣어 주세요.' });
-  try {
-    const prompt = `너는 중학교 2학년 과학 광물 실험 도우미야. 학생에게 짧고 정확하게 한국어로 답해.\n현재 광물: ${mineral}\n광물 정보: ${JSON.stringify(context)}\n실험 기록: ${JSON.stringify(records)}\n질문: ${message}`;
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] })
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+
+  if (!apiKey) {
+    return res.status(200).json({
+      reply: fallbackReply(message, mineral, context, records),
+      source: "fallback_no_api_key"
     });
-    const data = await r.json();
-    const reply = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join('\n') || '답변을 만들지 못했습니다.';
-    return res.status(200).json({ reply });
-  } catch (e) { return res.status(200).json({ reply: 'AI 연결에 문제가 있어요. 지금은 앱 안의 기본 안내를 사용해 주세요.' }); }
+  }
+
+  try {
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build"
+        }
+      }
+    });
+
+    const prompt = `
+당신은 중학교 2학년 과학 교사이며 현재 '광물 가상 실험실'에서 학생의 실험을 돕고 있습니다.
+
+[현재 상황]
+선택된 광물: ${mineral || "없음"}
+광물 정보: ${JSON.stringify(context || {})}
+학생의 현재 실험 기록: ${JSON.stringify(records || {})}
+
+[학생 질문]
+${message || ""}
+
+[답변 규칙]
+- 한국어로 답변하세요.
+- 중학교 2학년 수준으로 설명하세요.
+- 너무 길게 쓰지 말고 3~6문장 정도로 답하세요.
+- 필요한 경우 돋보기, 조흔판, 쇠못, 묽은 염산, 자석 도구 사용법을 안내하세요.
+- 실험에서 직접 확인해야 하는 내용은 단정하기보다 "실험으로 확인해 보자"처럼 말하세요.
+`;
+
+    const response = await ai.models.generateContent({
+      model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+      contents: prompt
+    });
+
+    const reply = response?.text || fallbackReply(message, mineral, context, records);
+    return res.status(200).json({ reply, source: "gemini" });
+  } catch (error) {
+    console.error("Gemini API Error:", error);
+    return res.status(200).json({
+      reply: fallbackReply(message, mineral, context, records),
+      source: "fallback_api_error"
+    });
+  }
 }
