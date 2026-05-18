@@ -50,6 +50,18 @@ ${message || ""}
 `.trim();
 }
 
+async function generateWithModel(ai, model, prompt) {
+  const response = await ai.models.generateContent({
+    model,
+    contents: prompt,
+    config: {
+      temperature: 0.45,
+      maxOutputTokens: 512
+    }
+  });
+  return extractGeminiText(response);
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -62,7 +74,12 @@ export default async function handler(req, res) {
 
   const { message, mineral, context, records } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+
+  // 2.0 Flash가 계정 또는 지역에서 막히는 경우가 있어 기본 모델을 2.5 Flash로 바꿨습니다.
+  // Vercel 환경변수 GEMINI_MODEL을 넣으면 이 값이 우선됩니다.
+  const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const fallbackModels = ["gemini-1.5-flash", "gemini-2.0-flash"].filter(m => m !== primaryModel);
+  const modelsToTry = [primaryModel, ...fallbackModels];
 
   if (!apiKey) {
     return res.status(200).json({
@@ -77,24 +94,32 @@ export default async function handler(req, res) {
     const ai = new GoogleGenAI({
       apiKey,
       httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build"
-        }
+        headers: { "User-Agent": "aistudio-build" }
       }
     });
 
     const prompt = buildPrompt({ message, mineral, context, records });
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        temperature: 0.45,
-        maxOutputTokens: 512
-      }
-    });
+    const errors = [];
 
-    const reply = extractGeminiText(response) || fallbackReply(message, mineral, context, records);
-    return res.status(200).json({ reply, source: "gemini_sdk", model });
+    for (const model of modelsToTry) {
+      try {
+        const reply = await generateWithModel(ai, model, prompt);
+        if (reply) {
+          return res.status(200).json({ reply, source: "gemini_sdk", model });
+        }
+        errors.push(`${model}: empty response`);
+      } catch (modelError) {
+        errors.push(`${model}: ${modelError?.message || String(modelError)}`);
+      }
+    }
+
+    return res.status(200).json({
+      source: "gemini_model_error",
+      reply:
+        `Gemini 모델 호출이 실패했습니다. 시도한 모델: ${modelsToTry.join(", ")}\n오류: ${errors.join(" | ")}\n\n` +
+        "Vercel 환경변수에 GEMINI_MODEL=gemini-2.5-flash 또는 GEMINI_MODEL=gemini-1.5-flash를 넣고 Redeploy 해 보세요.\n\n" +
+        fallbackReply(message, mineral, context, records)
+    });
   } catch (error) {
     console.error("Gemini API Error:", error);
     const details = error?.message || String(error || "unknown error");
