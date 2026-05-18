@@ -3,7 +3,5 @@
   "scripts": {
     "dev": "vercel dev"
   },
-  "dependencies": {
-    "@google/genai": "latest"
-  }
+  "dependencies": {}
 }
