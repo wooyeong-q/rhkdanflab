@@ -1,15 +1,10 @@
-광물 가상 실험실 Vercel 배포용 최종본
+광물 가상 실험실 배포본
 
-필수 구조:
-index.html
-assets/minerals/*.png
-api/chat.js
-package.json
-.env.example
+GitHub 저장소 첫 화면에 index.html, assets, api, package.json이 바로 보이도록 업로드하세요.
 
-Gemini 챗봇 설정:
-1. Vercel 프로젝트 Settings → Environment Variables 이동
-2. GEMINI_API_KEY 추가
-3. 저장 후 Deployments → Redeploy 실행
+Vercel 환경변수:
+GEMINI_API_KEY = Google AI Studio API 키
+GEMINI_MODEL = gemini-2.5-flash  (선택. 기본값도 2.5 Flash)
 
-api/chat.js는 @google/genai의 GoogleGenAI 방식을 사용합니다.
+2.0 Flash가 작동하지 않는 계정 또는 환경을 고려해 api/chat.js는 기본 모델을 gemini-2.5-flash로 사용합니다.
+실패하면 gemini-1.5-flash와 gemini-2.0-flash를 순서대로 한 번 더 시도합니다.
