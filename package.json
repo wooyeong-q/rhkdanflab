@@ -1,7 +1,15 @@
 {
+  "name": "mineral-virtual-lab",
+  "private": true,
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vercel dev"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@google/genai": "^1.29.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }
