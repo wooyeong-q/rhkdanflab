@@ -1,0 +1,85 @@
+name: Improve mobile streak interaction
+
+on:
+  push:
+    paths:
+      - '.github/workflows/mobile-interaction-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  improve-mobile-streak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch mobile streak interaction
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+          marker = '/* MOBILE_INTERACTION_V2 */'
+
+          if marker in text:
+              print('Mobile interaction V2 already applied.')
+              raise SystemExit(0)
+
+          css = r'''
+            /* MOBILE_INTERACTION_V2 */
+            @media (max-width:760px){
+              .streak-plate{
+                left:50%!important;
+                right:auto!important;
+                bottom:34px!important;
+                width:min(88vw,344px)!important;
+                transform:translateX(-50%) translateY(16px) rotate(-1deg) perspective(700px) rotateX(3deg)!important;
+              }
+              .stage.streak-mode .streak-plate{
+                transform:translateX(-50%) translateY(0) rotate(-1deg) perspective(700px) rotateX(3deg)!important;
+              }
+              .sample-stand{width:min(76vw,286px)!important;height:min(57vw,214px)!important}
+              .sample{width:min(68vw,256px)!important;height:min(51vw,192px)!important}
+              .stage.streak-mode .sample-label{top:12px!important}
+              .stage.streak-mode .plate-label{top:50px!important}
+            }
+            @media (max-width:420px){
+              .streak-plate{width:min(90vw,338px)!important}
+              .sample-stand{width:min(78vw,278px)!important;height:min(58.5vw,208px)!important}
+              .sample{width:min(70vw,248px)!important;height:min(52.5vw,186px)!important}
+            }
+          '''
+
+          old_streak = "if(moveDrag.mode==='streak'){const center=sampleCenterStage();const over=inRectPoint(sr.left+center.x,sr.top+center.y,els.streakPlate);els.stage.classList.toggle('streak-ready',over);if(over){const p=local(els.streakPlate,sr.left+center.x,sr.top+center.y);"
+          new_streak = "if(moveDrag.mode==='streak'){const center=sampleCenterStage();const sampleRect=rect(els.sample);const plateRect=rect(els.streakPlate);const touchTop=sampleRect.top+sampleRect.height*.34;const overlapX=Math.max(0,Math.min(sampleRect.right+30,plateRect.right+26)-Math.max(sampleRect.left-30,plateRect.left-26));const overlapY=Math.max(0,Math.min(sampleRect.bottom+28,plateRect.bottom+26)-Math.max(touchTop,plateRect.top-26));const over=overlapX>Math.min(sampleRect.width,plateRect.width)*.07&&overlapY>8;els.stage.classList.toggle('streak-ready',over);if(over){const contactX=clamp(sampleRect.left+sampleRect.width*.5,plateRect.left+10,plateRect.right-10);const contactY=clamp(sampleRect.top+sampleRect.height*.76,plateRect.top+10,plateRect.bottom-10);const p=local(els.streakPlate,contactX,contactY);"
+
+          if old_streak not in text:
+              raise SystemExit('Could not find streak contact logic.')
+          text = text.replace(old_streak, new_streak, 1)
+
+          text = text.replace("moveDrag.mode==='streak'&&streakLen>45", "moveDrag.mode==='streak'&&streakLen>24", 1)
+          text = text.replace("width:4.8,alpha:.18", "width:9.2,alpha:.22", 1)
+          text = text.replace("const spread=(Math.random()*10-5)", "const spread=(Math.random()*20-10)", 1)
+          text = text.replace('</style>', css + '\n  </style>', 1)
+          path.write_text(text, encoding='utf-8')
+          print('Applied mobile interaction V2.')
+          PY
+
+      - name: Commit improved interaction
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m '모바일 조흔판 판정 및 조흔 표시 영역 확대'
+          git push
