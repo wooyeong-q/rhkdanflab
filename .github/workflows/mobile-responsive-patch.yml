@@ -1,4 +1,4 @@
-name: Apply mobile mineral interaction fixes
+name: Apply all-device mineral movement fix
 
 on:
   push:
@@ -10,14 +10,14 @@ permissions:
   contents: write
 
 jobs:
-  patch-mobile-interaction:
+  patch-all-device-movement:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Expand mineral movement and streak path
+      - name: Expand mineral movement on PC tablet and mobile
         shell: bash
         run: |
           python - <<'PY'
@@ -25,28 +25,26 @@ jobs:
 
           path = Path('index.html')
           text = path.read_text(encoding='utf-8')
-          marker = 'MOBILE_DRAG_RANGE_V3'
+          marker = 'ALL_DEVICE_DRAG_RANGE_V4'
 
           if marker in text:
-              print('Mobile drag fix already applied.')
+              print('All-device drag range already applied.')
               raise SystemExit(0)
 
-          old_bounds = "left=clamp(left,sm.width/2,sr.width-sm.width/2);top=clamp(top,-oy,sr.height-sm.height-oy);"
-          new_bounds = "const isMobile=window.matchMedia('(max-width:760px)').matches;const sideKeep=isMobile?sm.width*.05:sm.width*.35;const verticalOverflow=isMobile?sm.height*.28:sm.height*.12;left=clamp(left,sideKeep,sr.width-sideKeep);top=clamp(top,-oy-verticalOverflow,sr.height-sm.height-oy+verticalOverflow);"
+          current_bounds = "const isMobile=window.matchMedia('(max-width:760px)').matches;const sideKeep=isMobile?sm.width*.05:sm.width*.35;const verticalOverflow=isMobile?sm.height*.28:sm.height*.12;left=clamp(left,sideKeep,sr.width-sideKeep);top=clamp(top,-oy-verticalOverflow,sr.height-sm.height-oy+verticalOverflow);"
+          original_bounds = "left=clamp(left,sm.width/2,sr.width-sm.width/2);top=clamp(top,-oy,sr.height-sm.height-oy);"
+          all_device_bounds = "const sideKeep=sm.width*.05;const verticalOverflow=sm.height*.28;left=clamp(left,sideKeep,sr.width-sideKeep);top=clamp(top,-oy-verticalOverflow,sr.height-sm.height-oy+verticalOverflow);"
 
-          old_contact = "const contactX=clamp(sampleRect.left+sampleRect.width*.5,plateRect.left+10,plateRect.right-10);const contactY=clamp(sampleRect.top+sampleRect.height*.76,plateRect.top+10,plateRect.bottom-10);"
-          new_contact = "const contactX=clamp(e.clientX,plateRect.left+8,plateRect.right-8);const preferredContactY=sampleRect.top+sampleRect.height*.76;const contactY=clamp(preferredContactY,plateRect.top+8,plateRect.bottom-8);"
-
-          if old_bounds not in text:
+          if current_bounds in text:
+              text = text.replace(current_bounds, all_device_bounds, 1)
+          elif original_bounds in text:
+              text = text.replace(original_bounds, all_device_bounds, 1)
+          else:
               raise SystemExit('Movement boundary code not found.')
-          if old_contact not in text:
-              raise SystemExit('Streak contact code not found.')
 
-          text = text.replace(old_bounds, new_bounds, 1)
-          text = text.replace(old_contact, new_contact, 1)
-          text = text.replace('</body>', '<!-- MOBILE_DRAG_RANGE_V3 -->\n</body>', 1)
+          text = text.replace('</body>', '<!-- ALL_DEVICE_DRAG_RANGE_V4 -->\n</body>', 1)
           path.write_text(text, encoding='utf-8')
-          print('Applied mobile movement and streak-path fix.')
+          print('Applied PC, tablet, and mobile movement-range fix.')
           PY
 
       - name: Commit fixed index
@@ -59,5 +57,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m '모바일 광물 화면 밖 이동과 조흔 경로 개선'
+          git commit -m 'PC 태블릿 모바일 광물 이동 범위 통일'
           git push
