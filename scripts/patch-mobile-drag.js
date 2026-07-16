@@ -21,4 +21,4 @@ text = text.replace(oldBounds, newBounds);
 text = text.replace(oldContact, newContact);
 text = text.replace('</body>', '<!-- MOBILE_DRAG_RANGE_V3 -->\n</body>');
 fs.writeFileSync(path, text);
-console.log('Patched mobile drag range.');
+console.log('Patched mobile drag range v3.');
